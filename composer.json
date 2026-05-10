@@ -1,7 +1,5 @@
 {
-    "name": "administrator/score",
     "require": {
-	    "firebase/php-jwt": "^6.4",
-	    "vlucas/phpdotenv": "^5.5"
+        "phpoffice/phpspreadsheet": "^4.1"
     }
 }

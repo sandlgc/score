@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题目管理系统</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            margin: 20px 0;
+            color: #333;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        form {
+            margin: 15px 0;
+        }
+        input, select, textarea, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 250px;
+        }
+        textarea {
+            height: 60px;
+        }
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button.del {
+            background: #d9534f;
+        }
+        button.edit {
+            background: #f0ad4e;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #f2f2f2;
+        }
+        img {
+            max-width: 80%;
+            margin: 10px 0;
+        }
+        .filter-row {
+            margin: 15px 0;
+        }
+        /* 编辑模态框样式 */
+		.modal-overlay {
+		    position: fixed;
+		    top: 0;
+		    left: 0;
+		    width: 100%;
+		    height: 100%;
+		    background: rgba(0,0,0,0.5);
+		    display: flex;
+		    align-items: center;
+		    justify-content: center;
+		    z-index: 9999;
+		}
+		.modal-content {
+		    background: white;
+		    padding: 20px;
+		    border-radius: 8px;
+		    width: 90%;
+		    max-width: 600px;
+		    max-height: 90vh;
+		    overflow-y: auto;
+		}
+		.modal-content h3 {
+		    margin-top: 0;
+		}
+		.modal-content input,
+		.modal-content textarea {
+		    width: 100%;
+		    margin: 5px 0 15px;
+		    padding: 8px;
+		    border: 1px solid #ddd;
+		    border-radius: 4px;
+		    box-sizing: border-box;
+		}
+		.modal-content textarea {
+		    height: 80px;
+		    resize: vertical;
+		}
+		.modal-buttons {
+		    text-align: right;
+		    margin-top: 15px;
+		}
+		.modal-buttons button {
+		    width: auto;
+		    margin-left: 10px;
+		}
+    </style>
+</head>
+<body>
+    <h1>题目管理系统</h1>
+
+    <!-- 1. Excel 导入 -->
+    <div class="section">
+        <h2>Excel 批量导入</h2>
+        <form action="import_questions.php" method="post" enctype="multipart/form-data">
+            <label>选择 Excel 文件：</label>
+            <input type="file" name="excel_file" required>
+            <button type="submit">导入题目</button>
+        </form>
+        <h3>Excel 格式要求</h3>
+        <img src="img/格式如下.png" width="80%">
+    </div>
+
+    <!-- 2. 手动添加题目 -->
+    <div class="section">
+        <h2>手动添加题目</h2>
+        <form id="addForm">
+            <input type="text" name="chapter_name" placeholder="章节名称" required><br>
+            <textarea name="question" placeholder="题目内容" required></textarea><br>
+            <input type="text" name="option1" placeholder="选项1" required>
+            <input type="text" name="option2" placeholder="选项2" required><br>
+            <input type="text" name="option3" placeholder="选项3">
+            <input type="text" name="option4" placeholder="选项4"><br>
+            <input type="text" name="answer" placeholder="正确答案（1/2/3/4）" required><br>
+            <button type="submit">添加题目</button>
+        </form>
+    </div>
+
+    <!-- 3. 筛选 + 题目列表 -->
+    <div class="section">
+        <h2>题目列表管理</h2>
+        <div class="filter-row">
+            <label>按章节筛选：</label>
+            <select id="chapterFilter">
+                <option value="">全部章节</option>
+            </select>
+        </div>
+
+        <table id="questionTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>章节</th>
+                    <th>题目</th>
+                    <th>选项A</th>
+                    <th>选项B</th>
+                    <th>选项C</th>
+                    <th>选项D</th>
+                    <th>答案</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="questionBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // 页面加载时加载题目和章节
+        window.onload = function() {
+            loadChapters();
+            loadQuestions();
+        };
+
+        // 加载所有章节（用于筛选）
+        function loadChapters() {
+            fetch('import_questions.php?action=getChapters')
+               .then(res => res.json())
+               .then(data => {
+                    let select = document.getElementById('chapterFilter');
+                    data.forEach(ch => {
+                        let opt = document.createElement('option');
+                        opt.value = ch.chapter_name;
+                        opt.textContent = ch.chapter_name;
+                        select.appendChild(opt);
+                    });
+                });
+        }
+
+        // 加载题目列表
+        function loadQuestions() {
+            let chapter = document.getElementById('chapterFilter').value;
+            fetch(`import_questions.php?action=getQuestions&chapter=${encodeURIComponent(chapter)}`)
+               .then(res => res.json())
+               .then(data => {
+                    let tbody = document.getElementById('questionBody');
+                    tbody.innerHTML = '';
+                    data.forEach(q => {
+                        let tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${q.id}</td>
+                            <td>${q.chapter_name}</td>
+                            <td>${q.question}</td>
+                            <td>${q.option1}</td>
+                            <td>${q.option2}</td>
+                            <td>${q.option3}</td>
+                            <td>${q.option4}</td>
+                            <td>${q.answer}</td>
+                            <td>
+                                <button class="edit" onclick="editQuestion(${q.id})">编辑</button>
+                                <button class="del" onclick="deleteQuestion(${q.id})">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        // 添加题目
+        document.getElementById('addForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            let formData = new FormData(this);
+            formData.append('action', 'addQuestion');
+
+            fetch('import_questions.php', {
+                method: 'POST',
+                body: formData
+            }).then(res => res.text())
+             .then(msg => {
+                alert(msg);
+                loadQuestions();
+                loadChapters();
+                this.reset();
+            });
+        });
+
+        // 删除题目
+        function deleteQuestion(id) {
+            if (!confirm('确定删除？')) return;
+            fetch(`import_questions.php?action=deleteQuestion&id=${id}`)
+               .then(res => res.text())
+               .then(msg => {
+                    alert(msg);
+                    loadQuestions();
+                    loadChapters();
+                });
+        }
+
+        // 编辑题目（使用真正的模态框表单）
+		function editQuestion(id) {
+		    fetch(`import_questions.php?action=getOneQuestion&id=${id}`)
+		       .then(res => res.json())
+		       .then(q => {
+		            // 先移除可能存在的旧模态框
+		            const oldModal = document.getElementById('editModalOverlay');
+		            if (oldModal) oldModal.remove();
+		
+		            // 创建模态框 HTML
+		            const modalOverlay = document.createElement('div');
+		            modalOverlay.id = 'editModalOverlay';
+		            modalOverlay.className = 'modal-overlay';
+		
+		            modalOverlay.innerHTML = `
+		                <div class="modal-content">
+		                    <h3>编辑题目 ID：${id}</h3>
+		                    <div>
+		                        <label>章节名称：</label>
+		                        <input type="text" id="edit_chapter" value="${q.chapter_name}" required>
+		                    </div>
+		                    <div>
+		                        <label>题目内容：</label>
+		                        <textarea id="edit_question" required>${q.question}</textarea>
+		                    </div>
+		                    <div>
+		                        <label>选项A：</label>
+		                        <input type="text" id="edit_opt1" value="${q.option1}" required>
+		                    </div>
+		                    <div>
+		                        <label>选项B：</label>
+		                        <input type="text" id="edit_opt2" value="${q.option2}" required>
+		                    </div>
+		                    <div>
+		                        <label>选项C：</label>
+		                        <input type="text" id="edit_opt3" value="${q.option3 || ''}">
+		                    </div>
+		                    <div>
+		                        <label>选项D：</label>
+		                        <input type="text" id="edit_opt4" value="${q.option4 || ''}">
+		                    </div>
+		                    <div>
+		                        <label>正确答案（1/2/3/4）：</label>
+		                        <input type="text" id="edit_ans" value="${q.answer}" required>
+		                    </div>
+		                    <div class="modal-buttons">
+		                        <button type="button" onclick="submitEdit(${id})" style="background:#4285f4;">保存</button>
+		                        <button type="button" onclick="closeEditModal()" style="background:#666;">取消</button>
+		                    </div>
+		                </div>
+		            `;
+		
+		            // 把模态框加到页面上
+		            document.body.appendChild(modalOverlay);
+		        });
+		}
+		
+		// 关闭编辑模态框
+		function closeEditModal() {
+		    const modal = document.getElementById('editModalOverlay');
+		    if (modal) modal.remove();
+		}
+		
+		// 提交编辑
+		function submitEdit(id) {
+		    // 获取表单值
+		    const chapter = document.getElementById('edit_chapter').value.trim();
+		    const question = document.getElementById('edit_question').value.trim();
+		    const option1 = document.getElementById('edit_opt1').value.trim();
+		    const option2 = document.getElementById('edit_opt2').value.trim();
+		    const option3 = document.getElementById('edit_opt3').value.trim();
+		    const option4 = document.getElementById('edit_opt4').value.trim();
+		    const answer = document.getElementById('edit_ans').value.trim().toUpperCase();
+		
+		    // 简单校验
+		    if (!chapter || !question || !option1 || !option2 || !answer) {
+		        alert('章节、题目、选项A/B、答案为必填项！');
+		        return;
+		    }
+		    if (!['1','2','3','4'].includes(answer)) {
+		        alert('答案必须是 1/2/3/4 中的一个！');
+		        return;
+		    }
+		
+		    // 构造表单数据
+		    const formData = new FormData();
+		    formData.append('action', 'editQuestion');
+		    formData.append('id', id);
+		    formData.append('chapter_name', chapter);
+		    formData.append('question', question);
+		    formData.append('option1', option1);
+		    formData.append('option2', option2);
+		    formData.append('option3', option3);
+		    formData.append('option4', option4);
+		    formData.append('answer', answer);
+		
+		    // 提交请求
+		    fetch('import_questions.php', {
+		        method: 'POST',
+		        body: formData
+		    })
+		    .then(res => res.text())
+		    .then(msg => {
+		        alert(msg);
+		        closeEditModal();
+		        loadQuestions();
+		        loadChapters();
+		    })
+		    .catch(err => {
+		        alert('提交失败：' + err);
+		    });
+		}
+
+        // 章节筛选切换
+        document.getElementById('chapterFilter').addEventListener('change', loadQuestions);
+    </script>
+</body>
+</html>

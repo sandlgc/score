@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>学生游戏积分排行榜</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2d3436;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        th,
+        td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #00b894;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        tr:hover {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>学生游戏积分排行榜</h1>
+    <table id="leaderboard-table">
+        <thead>
+            <tr>
+                <th>排名</th>
+                <th>姓名</th>
+                <th>班级</th>
+                <th>积分</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        window.onload = function () {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'get_leaderboard.php', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    try {
+                        const leaderboard = JSON.parse(xhr.responseText);
+                        const tableBody = document.getElementById('leaderboard-table').getElementsByTagName('tbody')[0];
+                        leaderboard.forEach((entry, index) => {
+                            const row = tableBody.insertRow();
+                            const rankCell = row.insertCell(0);
+                            const nameCell = row.insertCell(1);
+                            const classCell = row.insertCell(2);
+                            const pointsCell = row.insertCell(3);
+
+                            rankCell.textContent = index + 1;
+                            nameCell.textContent = entry.name;
+                            classCell.textContent = entry.class;
+                            pointsCell.textContent = entry.total_points;
+                        });
+                    } catch (error) {
+                        console.error('解析 JSON 数据时出错:', error);
+                    }
+                }
+            };
+            xhr.send();
+        };
+    </script>
+</body>
+
+</html>    

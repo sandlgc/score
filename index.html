@@ -1,10 +1,118 @@
 <!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="utf-8" />
-		<title></title>
-	</head>
-	<body>
-		
-	</body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>知识盲盒大作战 - 游戏大厅</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 50%, #bcccdc 100%);
+            min-height: 100vh;
+            user-select: none;
+            color: #2d3748;
+            overflow-x: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* 主容器 */
+        .main-container {
+            background: #ffffff;
+            padding: 60px 50px;
+            border-radius: 28px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.08);
+            max-width: 750px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* 标题 */
+        .main-title {
+            font-size: 46px;
+            color: #2b6cb0;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #718096;
+            margin-bottom: 50px;
+            font-weight: normal;
+        }
+
+        /* 游戏模式按钮 */
+        .game-list {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            margin-bottom: 40px;
+        }
+
+        .game-btn {
+            padding: 22px 30px;
+            font-size: 22px;
+            font-weight: bold;
+            border-radius: 18px;
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .game-btn:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 两个游戏模式按钮颜色 */
+        .btn-mode1 {
+            background: linear-gradient(90deg, #3182ce, #2b6cb0);
+        }
+
+        .btn-mode2 {
+            background: linear-gradient(90deg, #e53e3e, #c53030);
+        }
+
+        /* 底部信息 */
+        .footer {
+            font-size: 14px;
+            color: #a0aec0;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main-container">
+        <h1 class="main-title">📦 知识盲盒大作战</h1>
+        <p class="subtitle">选择游戏模式，开始挑战</p>
+
+        <div class="game-list">
+            <button class="game-btn btn-mode1" onclick="window.location.href='index2.html'">
+                🎮 模式一：小队对战
+            </button>
+            <button class="game-btn btn-mode2" onclick="window.location.href='index1.html'">
+                🎮 模式二：单人PK
+            </button>
+        </div>
+
+        <div class="footer">知识盲盒大作战 © 版权所有</div>
+    </div>
+
+</body>
 </html>
