@@ -1,0 +1,4 @@
+[11-Dec-2025 14:30:23 Asia/Shanghai] PHP Fatal error:  Uncaught Error: Call to undefined function getTodayPoints() in C:\xampp\htdocs\score2025\api.php:86
+Stack trace:
+#0 {main}
+  thrown in C:\xampp\htdocs\score2025\api.php on line 86

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>错题重做系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#36CFC9',
+            success: '#52C41A',
+            danger: '#FF4D4F',
+            warning: '#FAAD14',
+            dark: '#1F2937',
+            light: '#F9FAFB'
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+    
+    // 转义HTML特殊字符
+		function escapeHtml(text) {
+		  return text
+		    .replace(/&/g, '&amp;')
+		    .replace(/</g, '&lt;')
+		    .replace(/>/g, '&gt;')
+		    .replace(/"/g, '&quot;')
+		    .replace(/'/g, '&#039;');
+		}
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .card-shadow {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+      }
+      .btn-hover {
+        @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5;
+      }
+      .scale-hover {
+        @apply transition-transform duration-300 hover:scale-105;
+      }
+      .progress-animation {
+        transition: width 0.5s ease-in-out;
+      }
+      /* 新增：禁用按钮的样式（强制生效） */
+      .btn-disabled {
+        @apply opacity-50 cursor-not-allowed pointer-events-none !important;
+      }
+    }
+  </style>
+</head>
+<body class="font-inter bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <i class="fa fa-graduation-cap text-primary text-2xl"></i>
+        <h1 class="text-xl font-bold text-primary">错题重做系统</h1>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="hidden md:flex items-center space-x-1 text-sm">
+          <i class="fa fa-user-circle-o text-gray-500"></i>
+          <span id="student-name">张三</span>
+          <span class="text-gray-400">|</span>
+          <span id="student-class">软件工程1班</span>
+        </div>
+        <button id="logout-btn" class="text-gray-600 hover:text-primary transition-colors">
+          <i class="fa fa-sign-out"></i>
+          <span class="hidden md:inline ml-1">退出</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="flex-grow container mx-auto px-4 py-6">
+    <!-- 进度卡片 -->
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-800 mb-1">错题重做进度</h2>
+          <p class="text-sm text-gray-500">当前章节：<span id="current-chapter" class="font-medium">全部章节</span></p>
+        </div>
+        <div class="w-full md:w-2/3">
+          <div class="flex items-center gap-3">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div id="progress-bar" class="bg-primary h-2.5 rounded-full progress-animation" style="width: 0%"></div>
+            </div>
+            <span id="progress-text" class="text-sm font-medium text-primary">0%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 章节选择 -->
+    <div class="mb-8">
+      <h2 class="text-lg font-semibold mb-4">选择章节</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3" id="chapter-list">
+        <!-- 章节按钮将通过JavaScript动态生成 -->
+      </div>
+    </div>
+
+    <!-- 题目区域 -->
+    <div id="question-container" class="bg-white rounded-xl shadow-sm p-6 mb-8">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold" id="question-number">题目 1/0</h2>
+        <div class="flex space-x-2">
+          <span class="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full" id="question-chapter">
+            <i class="fa fa-book mr-1"></i> 章节名称
+          </span>
+          <span class="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full" id="question-id">
+            <i class="fa fa-tag mr-1"></i> 题目ID: 0
+          </span>
+        </div>
+      </div>
+
+      <div id="question-content" class="mb-6 text-lg">
+        <!-- 题目内容将通过JavaScript动态生成 -->
+      </div>
+
+      <div id="options-container" class="space-y-3 mb-8">
+        <!-- 选项将通过JavaScript动态生成 -->
+      </div>
+
+      <div class="flex justify-between">
+        <button id="prev-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hidden btn-hover">
+          <i class="fa fa-chevron-left mr-1"></i> 上一题
+        </button>
+        <div class="flex space-x-3">
+          <button id="skip-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg btn-hover">
+            <i class="fa fa-forward mr-1"></i> 跳过
+          </button>
+          <button id="submit-btn" class="px-4 py-2 bg-primary text-white rounded-lg btn-hover">
+            提交答案 <i class="fa fa-check ml-1"></i>
+          </button>
+        </div>
+        <button id="next-btn" class="px-4 py-2 bg-primary text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hidden btn-hover">
+          下一题 <i class="fa fa-chevron-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 结果反馈 -->
+    <div id="feedback-container" class="bg-white rounded-xl shadow-sm p-6 mb-8 hidden">
+      <div id="correct-feedback" class="hidden">
+        <div class="flex items-center mb-4">
+          <div class="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center text-success">
+            <i class="fa fa-check text-2xl"></i>
+          </div>
+          <div class="ml-4">
+            <h3 class="text-xl font-bold text-success">回答正确！</h3>
+            <p class="text-gray-600">恭喜你，答对了这道题，该错题记录已清除。</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="incorrect-feedback" class="hidden">
+        <div class="flex items-center mb-4">
+          <div class="w-12 h-12 rounded-full bg-danger/20 flex items-center justify-center text-danger">
+            <i class="fa fa-times text-2xl"></i>
+          </div>
+          <div class="ml-4">
+            <h3 class="text-xl font-bold text-danger">回答错误</h3>
+            <p class="text-gray-600">正确答案是：<span id="correct-answer" class="font-medium"></span></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6">
+        <button id="continue-btn" class="px-6 py-3 bg-primary text-white rounded-lg btn-hover">
+          继续练习 <i class="fa fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 完成提示 -->
+    <div id="completion-message" class="bg-white rounded-xl shadow-sm p-6 mb-8 hidden text-center">
+      <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-secondary/20 flex items-center justify-center">
+        <i class="fa fa-trophy text-4xl text-secondary"></i>
+      </div>
+      <h2 class="text-2xl font-bold mb-2">太棒了！</h2>
+      <p class="text-gray-600 mb-6">你已完成当前章节的所有错题练习。</p>
+      <button id="restart-btn" class="px-6 py-3 bg-primary text-white rounded-lg btn-hover">
+        <i class="fa fa-refresh mr-1"></i> 重新练习
+      </button>
+    </div>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="bg-white border-t border-gray-200 py-6">
+    <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+      <p>© 2025 错题重做系统 | 学生端</p>
+    </div>
+  </footer>
+
+  <!-- JavaScript -->
+  <script>
+    // 应用状态
+    const state = {
+      currentChapter: "全部章节",
+      currentQuestionIndex: 0,
+      selectedOption: null,
+      questions: [],
+      answeredQuestions: new Set(),
+      correctAnswers: 0,
+      studentId: "110813", // 示例学生ID
+      isCurrentQuestionCorrect: false // 新增：标记当前题目是否答对
+    };
+
+    // DOM 元素
+    const elements = {
+      chapterList: document.getElementById('chapter-list'),
+      questionContainer: document.getElementById('question-container'),
+      questionNumber: document.getElementById('question-number'),
+      questionChapter: document.getElementById('question-chapter'),
+      questionId: document.getElementById('question-id'),
+      questionContent: document.getElementById('question-content'),
+      optionsContainer: document.getElementById('options-container'),
+      prevBtn: document.getElementById('prev-btn'),
+      nextBtn: document.getElementById('next-btn'),
+      skipBtn: document.getElementById('skip-btn'),
+      submitBtn: document.getElementById('submit-btn'),
+      feedbackContainer: document.getElementById('feedback-container'),
+      correctFeedback: document.getElementById('correct-feedback'),
+      incorrectFeedback: document.getElementById('incorrect-feedback'),
+      correctAnswer: document.getElementById('correct-answer'),
+      continueBtn: document.getElementById('continue-btn'),
+      completionMessage: document.getElementById('completion-message'),
+      restartBtn: document.getElementById('restart-btn'),
+      progressBar: document.getElementById('progress-bar'),
+      progressText: document.getElementById('progress-text'),
+      currentChapter: document.getElementById('current-chapter'),
+      logoutBtn: document.getElementById('logout-btn')
+    };
+
+    // 初始化应用
+    async function initApp() {
+      try {
+        // 从数据库获取学生信息
+        const studentInfo = await fetchStudentInfo(state.studentId);
+        if (studentInfo) {
+          document.getElementById('student-name').textContent = studentInfo.name;
+          document.getElementById('student-class').textContent = studentInfo.class;
+        }
+        
+        // 从数据库获取章节列表
+        const chapters = await fetchChapters();
+        initChapters(chapters);
+        
+        // 默认加载所有章节的错题
+        await loadQuestionsByChapter("全部章节");
+        
+        // 绑定事件处理函数
+        bindEventListeners();
+      } catch (error) {
+        showToast('初始化失败: ' + error.message, 'error');
+        console.error('初始化应用失败:', error);
+      }
+    }
+
+    // 从数据库获取学生信息
+    async function fetchStudentInfo(studentId) {
+      try {
+        const response = await fetch(`/score/api.php/students/${studentId}`);
+        if (!response.ok) throw new Error('获取学生信息失败');
+        return await response.json();
+      } catch (error) {
+        showToast('获取学生信息失败', 'error');
+        console.error('获取学生信息失败:', error);
+        return null;
+      }
+    }
+
+    // 从数据库获取章节列表
+    async function fetchChapters() {
+      try {
+        const response = await fetch('/score/api.php/chapters');
+        if (!response.ok) throw new Error('获取章节列表失败');
+        const data = await response.json();
+        return ['全部章节', ...data];
+      } catch (error) {
+        showToast('获取章节列表失败', 'error');
+        console.error('获取章节列表失败:', error);
+        return ['全部章节'];
+      }
+    }
+
+    // 从数据库获取指定章节的错题
+    async function fetchWrongQuestions(chapter) {
+      try {
+        const endpoint = chapter === "全部章节" 
+          ? `/score/api.php/students/${state.studentId}/wrong-questions` 
+          : `/score/api.php/students/${state.studentId}/wrong-questions?chapter=${encodeURIComponent(chapter)}`;
+        
+        const response = await fetch(endpoint);
+        if (!response.ok) throw new Error('获取错题列表失败');
+        
+        const wrongQuestions = await response.json();
+        return wrongQuestions.map(q => ({
+          id: q.id,
+          chapter: q.chapter_name, // 修正：后端返回的是chapter_name
+          question: q.question,
+          options: [
+            { id: 1, text: q.option1 },
+            { id: 2, text: q.option2 },
+            { id: 3, text: q.option3 },
+            { id: 4, text: q.option4 }
+          ],
+          answer: q.answer
+        }));
+      } catch (error) {
+        showToast('获取错题列表失败', 'error');
+        console.error('获取错题列表失败:', error);
+        return [];
+      }
+    }
+
+    // 初始化章节列表
+    function initChapters(chapters) {
+      chapters.forEach(chapter => {
+        const button = document.createElement('button');
+        button.className = `px-4 py-2 rounded-lg text-center scale-hover ${
+          chapter === "全部章节" ? "bg-primary text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+        }`;
+        button.textContent = chapter;
+        button.addEventListener('click', () => selectChapter(chapter));
+        elements.chapterList.appendChild(button);
+      });
+    }
+
+    // 选择章节
+    async function selectChapter(chapter) {
+      try {
+        state.currentChapter = chapter;
+        state.currentQuestionIndex = 0;
+        state.answeredQuestions.clear();
+        state.correctAnswers = 0;
+        state.isCurrentQuestionCorrect = false; // 重置
+        
+        elements.currentChapter.textContent = chapter;
+        await loadQuestionsByChapter(chapter);
+        
+        Array.from(elements.chapterList.children).forEach(btn => {
+          if (btn.textContent === chapter) {
+            btn.className = "px-4 py-2 rounded-lg text-center scale-hover bg-primary text-white";
+          } else {
+            btn.className = "px-4 py-2 rounded-lg text-center scale-hover bg-gray-100 text-gray-700 hover:bg-gray-200";
+          }
+        });
+      } catch (error) {
+        showToast('切换章节失败: ' + error.message, 'error');
+        console.error('切换章节失败:', error);
+      }
+    }
+
+    // 按章节加载问题
+    async function loadQuestionsByChapter(chapter) {
+      try {
+        state.questions = await fetchWrongQuestions(chapter);
+        updateProgress();
+        renderCurrentQuestion();
+      } catch (error) {
+        showToast('加载题目失败: ' + error.message, 'error');
+        console.error('加载题目失败:', error);
+      }
+    }
+
+    // 渲染当前问题
+    function renderCurrentQuestion() {
+      if (state.questions.length === 0) {
+        elements.questionContainer.classList.add('hidden');
+        elements.completionMessage.classList.remove('hidden');
+        return;
+      }
+      
+      elements.questionContainer.classList.remove('hidden');
+      elements.feedbackContainer.classList.add('hidden');
+      elements.completionMessage.classList.add('hidden');
+      
+      const question = state.questions[state.currentQuestionIndex];
+      
+      // 更新问题信息
+      elements.questionNumber.textContent = `题目 ${state.currentQuestionIndex + 1}/${state.questions.length}`;
+      elements.questionChapter.textContent = `\u{1F4D6} ${question.chapter || '未分类章节'}`;
+      elements.questionId.textContent = `\u{1F4D1} 题目ID: ${question.id}`;
+      elements.questionContent.textContent = question.question;
+      
+      // 清空选项容器
+      elements.optionsContainer.innerHTML = '';
+      
+      // 渲染选项
+      question.options.forEach(option => {
+        const optionElement = document.createElement('div');
+        optionElement.className = "option bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer";
+        const escapedText = escapeHtml(option.text);
+        optionElement.innerHTML = `
+          <div class="flex items-center">
+            <div class="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center mr-3 option-radio">
+              <div class="w-3 h-3 rounded-full bg-primary hidden"></div>
+            </div>
+            <span class="option-text">${String.fromCharCode(64 + option.id)}. ${escapedText}</span>
+          </div>
+        `;
+        
+        optionElement.addEventListener('click', () => selectOption(optionElement, option.id));
+        elements.optionsContainer.appendChild(optionElement);
+      });
+      
+      // 更新按钮状态
+      elements.prevBtn.classList.toggle('hidden', state.currentQuestionIndex === 0);
+      elements.nextBtn.classList.toggle('hidden', state.currentQuestionIndex === state.questions.length - 1);
+      elements.skipBtn.disabled = state.answeredQuestions.has(question.id);
+      
+      // 核心：强制重置提交按钮状态（移除禁用样式+启用）
+      elements.submitBtn.disabled = false;
+      elements.submitBtn.classList.remove('btn-disabled');
+      
+      // 重置状态
+      state.selectedOption = null;
+      state.isCurrentQuestionCorrect = false;
+    }
+
+    // 选择选项
+    function selectOption(element, optionId) {
+      // 仅当当前题目未答对时，允许选择选项
+      if (state.isCurrentQuestionCorrect) return;
+      
+      Array.from(elements.optionsContainer.children).forEach(optionEl => {
+        optionEl.classList.remove('bg-primary/10', 'border-primary');
+        optionEl.classList.add('bg-gray-50', 'border-gray-200');
+        optionEl.querySelector('.option-radio').classList.remove('border-primary');
+        optionEl.querySelector('.option-radio').classList.add('border-gray-300');
+        optionEl.querySelector('.option-radio > div').classList.add('hidden');
+      });
+      
+      element.classList.remove('bg-gray-50', 'border-gray-200');
+      element.classList.add('bg-primary/10', 'border-primary');
+      element.querySelector('.option-radio').classList.remove('border-gray-300');
+      element.querySelector('.option-radio').classList.add('border-primary');
+      element.querySelector('.option-radio > div').classList.remove('hidden');
+      
+      state.selectedOption = optionId;
+    }
+
+    // 提交答案
+    async function submitAnswer() {
+      // 核心拦截：如果当前题目已答对，直接返回
+      if (state.isCurrentQuestionCorrect) {
+        showToast('该题目已答对，无需重复提交', 'warning');
+        return;
+      }
+      
+      if (state.selectedOption === null) {
+        showToast('请选择一个选项', 'warning');
+        return;
+      }
+      
+      const question = state.questions[state.currentQuestionIndex];
+      const isCorrect = state.selectedOption === question.answer;
+      state.isCurrentQuestionCorrect = isCorrect; // 标记是否答对
+      
+      try {
+        await submitAnswerToServer(question.id, state.selectedOption, isCorrect);
+        
+        state.answeredQuestions.add(question.id);
+        if (isCorrect) {
+          state.correctAnswers++;
+          state.questions = state.questions.filter(q => q.id !== question.id);
+          
+          if (state.currentQuestionIndex >= state.questions.length && state.questions.length > 0) {
+            state.currentQuestionIndex = state.questions.length - 1;
+          }
+        }
+        
+        showFeedback(isCorrect, question.answer);
+        updateProgress();
+      } catch (error) {
+        showToast('提交答案失败: ' + error.message, 'error');
+        console.error('提交答案失败:', error);
+        // 提交失败时重置标记
+        state.isCurrentQuestionCorrect = false;
+      }
+    }
+
+    // 提交答案到服务器
+    async function submitAnswerToServer(questionId, selectedOption, isCorrect) {
+      try {
+        const response = await fetch(`/score/api.php/students/${state.studentId}/answer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            questionId: Number(questionId),
+            selectedOption: Number(selectedOption),
+            isCorrect: Boolean(isCorrect),
+            chapter: state.currentChapter
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `请求失败（${response.status}）`);
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        if (error.message.includes('Failed to fetch')) {
+             throw new Error('服务器连接失败，请检查网络或后端服务');
+        } else {
+             throw new Error(error.message);
+        }
+      }
+    }
+
+    // 显示反馈
+    function showFeedback(isCorrect, correctAnswerId) {
+      elements.feedbackContainer.classList.remove('hidden');
+      elements.correctFeedback.classList.toggle('hidden', !isCorrect);
+      elements.incorrectFeedback.classList.toggle('hidden', isCorrect);
+      
+      if (!isCorrect) {
+        const correctOption = state.questions[state.currentQuestionIndex].options.find(o => o.id === correctAnswerId);
+        elements.correctAnswer.textContent = `${String.fromCharCode(64 + correctAnswerId)}. ${correctOption.text}`;
+        
+        // 答错：启用提交按钮 + 清空选项选中 + 启用跳过按钮
+        elements.submitBtn.disabled = false;
+        elements.submitBtn.classList.remove('btn-disabled');
+        // 清空选项选中状态
+        Array.from(elements.optionsContainer.children).forEach(optionEl => {
+          optionEl.classList.remove('bg-primary/10', 'border-primary');
+          optionEl.classList.add('bg-gray-50', 'border-gray-200');
+          optionEl.querySelector('.option-radio').classList.remove('border-primary');
+          optionEl.querySelector('.option-radio').classList.add('border-gray-300');
+          optionEl.querySelector('.option-radio > div').classList.add('hidden');
+        });
+        state.selectedOption = null;
+        // 启用跳过按钮
+        elements.skipBtn.disabled = false;
+        elements.skipBtn.classList.remove('btn-disabled');
+      } else {
+        // 答对：强制禁用提交按钮 + 保持选项选中 + 禁用跳过按钮
+        elements.submitBtn.disabled = true;
+        elements.submitBtn.classList.add('btn-disabled'); // 应用强制禁用样式
+        // 禁用跳过按钮
+        elements.skipBtn.disabled = true;
+        elements.skipBtn.classList.add('btn-disabled');
+      }
+    }
+
+    // 继续下一题
+    function continueToNextQuestion() {
+      if (state.questions.length === 0) {
+        elements.questionContainer.classList.add('hidden');
+        elements.feedbackContainer.classList.add('hidden');
+        elements.completionMessage.classList.remove('hidden');
+        return;
+      }
+      
+      if (state.currentQuestionIndex < state.questions.length - 1) {
+        state.currentQuestionIndex++;
+        renderCurrentQuestion();
+      } else {
+        elements.questionContainer.classList.add('hidden');
+        elements.feedbackContainer.classList.add('hidden');
+        elements.completionMessage.classList.remove('hidden');
+      }
+    }
+
+    // 更新进度
+    function updateProgress() {
+      const total = state.questions.length;
+      const answered = state.answeredQuestions.size;
+      const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
+      
+      elements.progressBar.style.width = `${progress}%`;
+      elements.progressText.textContent = `${progress}%`;
+    }
+
+    // 显示提示消息
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg transform transition-all duration-500 ease-in-out z-50 ${
+        type === 'success' ? 'bg-success text-white' : 
+        type === 'error' ? 'bg-danger text-white' : 
+        type === 'warning' ? 'bg-warning text-white' : 'bg-primary text-white'
+      }`;
+      toast.textContent = message;
+      
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.classList.add('translate-y-0');
+      }, 10);
+      
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-20px]');
+        setTimeout(() => {
+          document.body.removeChild(toast);
+        }, 500);
+      }, 3000);
+    }
+
+    // 绑定事件监听器
+    function bindEventListeners() {
+      elements.prevBtn.addEventListener('click', () => {
+        if (state.currentQuestionIndex > 0) {
+          state.currentQuestionIndex--;
+          renderCurrentQuestion();
+        }
+      });
+      
+      elements.nextBtn.addEventListener('click', () => {
+        if (state.currentQuestionIndex < state.questions.length - 1) {
+          state.currentQuestionIndex++;
+          renderCurrentQuestion();
+        }
+      });
+      
+      elements.skipBtn.addEventListener('click', continueToNextQuestion);
+      
+      // 提交按钮点击事件（增加拦截）
+      elements.submitBtn.addEventListener('click', submitAnswer);
+      
+      elements.continueBtn.addEventListener('click', continueToNextQuestion);
+      
+      elements.restartBtn.addEventListener('click', () => {
+        selectChapter(state.currentChapter);
+      });
+      
+      elements.logoutBtn.addEventListener('click', () => {
+        if (confirm('确定要退出吗？')) {
+          showToast('已成功退出', 'success');
+          setTimeout(() => {
+            window.location.href = '#';
+          }, 1000);
+        }
+      });
+    }
+
+    // 页面加载完成后初始化应用
+    document.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>

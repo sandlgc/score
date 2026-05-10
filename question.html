@@ -1,0 +1,779 @@
+<?php
+session_start();
+include 'config.php';
+
+// 检测是否从结果页面返回（修复刷分漏洞）
+if (isset($_SERVER['HTTP_REFERER']) && 
+    strpos($_SERVER['HTTP_REFERER'], 'question.php') !== false && 
+    strpos($_SERVER['HTTP_REFERER'], 'chapter=') !== false && 
+    !isset($_GET['chapter'])) {
+    
+    // 重置章节选择和相关数据
+    unset($_SESSION['selected_chapter']);
+    header("Location: select_chapter.php");
+    exit();
+}
+
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit();
+}
+
+// 检查是否选择了章节
+if (!isset($_SESSION['selected_chapter'])) {
+    header("Location: select_chapter.php");
+    exit();
+}
+
+// 若章节变更，重置分数和答题状态
+if (isset($_GET['chapter']) && $_GET['chapter'] != $_SESSION['selected_chapter']) {
+    $_SESSION['selected_chapter'] = $_GET['chapter'];
+    $_SESSION['score'] = 0;
+    // 当章节变更时，重新打乱题目顺序并重置索引
+    if (isset($_SESSION['questions'])) {
+        shuffle($_SESSION['questions']);
+        $_SESSION['current_question_index'] = 0;
+    }
+    // 重置连续答对题目的计数器
+    $_SESSION['consecutive_correct'] = 0;
+    // 重置连续答对题目数量最高记录
+    $_SESSION['consecutive_correct_max'] = 0;
+    // 清除倒计时和本地存储中的倒计时时间
+    echo '<script>
+        if (typeof countdownInterval!== "undefined") {
+            clearInterval(countdownInterval);
+        }
+        localStorage.removeItem("countdownTimeLeft");
+        localStorage.removeItem("totalAnswerTime"); // 清除总答题时间
+    </script>';
+    // 重置答对题目数量
+    $_SESSION['correct_count'] = 0;
+    // 重置错题 ID 数组
+    $_SESSION['wrong_question_ids'] = [];
+    // 重置答题开始时间
+    $_SESSION['total_answer_start_time'] = microtime(true);
+    // 重置已作答题目数组
+    $_SESSION['answered_questions'] = [];
+}
+
+// 初始化分数
+if (!isset($_SESSION['score'])) {
+    $_SESSION['score'] = 0;
+}
+
+// 初始化连续答对题目的计数器
+if (!isset($_SESSION['consecutive_correct'])) {
+    $_SESSION['consecutive_correct'] = 0;
+}
+
+// 初始化答对题目数量
+if (!isset($_SESSION['correct_count'])) {
+    $_SESSION['correct_count'] = 0;
+}
+
+// 初始化连续答对题目数量最高记录
+if (!isset($_SESSION['consecutive_correct_max'])) {
+    $_SESSION['consecutive_correct_max'] = 0;
+}
+
+// 初始化错题 ID 数组
+if (!isset($_SESSION['wrong_question_ids'])) {
+    $_SESSION['wrong_question_ids'] = [];
+}
+
+// 初始化已作答题目数组
+if (!isset($_SESSION['answered_questions'])) {
+    $_SESSION['answered_questions'] = [];
+}
+
+// 页面刷新时重置连续答对题目数量
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_SERVER['HTTP_CACHE_CONTROL']) && $_SERVER['HTTP_CACHE_CONTROL'] === 'max-age=0') {
+    $_SESSION['consecutive_correct'] = 0;
+}
+
+// 检查是否有题目
+if (!isset($_SESSION['questions']) || count($_SESSION['questions']) === 0) {
+    echo "没有可用的题目。";
+    exit();
+}
+
+// 检查是否从 select_chapter.php 跳转过来
+if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'select_chapter.php')!== false) {
+    shuffle($_SESSION['questions']);
+    $_SESSION['current_question_index'] = 0;
+    // 重置连续答对题目的计数器
+    $_SESSION['consecutive_correct'] = 0;
+    // 重置连续答对题目数量最高记录
+    $_SESSION['consecutive_correct_max'] = 0;
+    // 清除倒计时和本地存储中的倒计时时间
+    echo '<script>
+        if (typeof countdownInterval!== "undefined") {
+            clearInterval(countdownInterval);
+        }
+        localStorage.removeItem("countdownTimeLeft");
+        localStorage.removeItem("totalAnswerTime"); // 清除总答题时间
+    </script>';
+    // 重置答对题目数量
+    $_SESSION['correct_count'] = 0;
+    // 重置错题 ID 数组
+    $_SESSION['wrong_question_ids'] = [];
+    // 重置总答题开始时间
+    $_SESSION['total_answer_start_time'] = microtime(true);
+    // 重置已作答题目数组
+    $_SESSION['answered_questions'] = [];
+}
+
+// 只有在初次进入章节答题时才打乱题目顺序并重置索引
+if (!isset($_SESSION['is_question_shuffled']) || $_SESSION['is_question_shuffled']!== $_SESSION['selected_chapter']) {
+    shuffle($_SESSION['questions']);
+    $_SESSION['current_question_index'] = 0;
+    $_SESSION['is_question_shuffled'] = $_SESSION['selected_chapter'];
+    // 重置连续答对题目的计数器
+    $_SESSION['consecutive_correct'] = 0;
+    // 重置连续答对题目数量最高记录
+    $_SESSION['consecutive_correct_max'] = 0;
+    // 清除倒计时和本地存储中的倒计时时间
+    echo '<script>
+        if (typeof countdownInterval!== "undefined") {
+            clearInterval(countdownInterval);
+        }
+        localStorage.removeItem("countdownTimeLeft");
+        localStorage.removeItem("totalAnswerTime"); // 清除总答题时间
+    </script>';
+    // 重置答对题目数量
+    $_SESSION['correct_count'] = 0;
+    // 重置错题 ID 数组
+    $_SESSION['wrong_question_ids'] = [];
+    // 重置总答题开始时间
+    $_SESSION['total_answer_start_time'] = microtime(true);
+    // 重置已作答题目数组
+    $_SESSION['answered_questions'] = [];
+}
+
+// 检查当前题目是否已经作答
+$allQuestionsAnswered = false;
+while (isset($_SESSION['questions'][$_SESSION['current_question_index']])) {
+    $currentQuestionId = $_SESSION['questions'][$_SESSION['current_question_index']]['id'];
+    if (in_array($currentQuestionId, $_SESSION['answered_questions'])) {
+        // 当前题目已作答，跳到下一题
+        $_SESSION['current_question_index']++;
+    } else {
+        // 当前题目未作答，跳出循环
+        break;
+    }
+    
+    // 检查是否所有题目都已作答
+    if ($_SESSION['current_question_index'] >= count($_SESSION['questions'])) {
+        $allQuestionsAnswered = true;
+        break;
+    }
+}
+
+// 如果所有题目都已作答，显示统计信息并结束本章
+if ($allQuestionsAnswered) {
+    // 计算总答题时间
+    $totalAnswerTime = microtime(true) - $_SESSION['total_answer_start_time'];
+    $answerTime = round($totalAnswerTime);
+    
+    // 计算正确率
+    $accuracy = ($_SESSION['correct_count'] / count($_SESSION['questions'])) * 100;
+    
+    // 记录答题记录
+    $chapter = $_SESSION['selected_chapter'];
+    $wrongQuestionIds = json_encode($_SESSION['wrong_question_ids']);
+    $totalQuestions = count($_SESSION['questions']);
+    $correctQuestions = $_SESSION['correct_count'];
+    $consecutiveCorrectMax = $_SESSION['consecutive_correct_max'];
+    
+    // 插入记录到数据库
+    $recordUrl = "insert_record.php?chapter=$chapter&accuracy=".urlencode($accuracy)."&consecutive_correct_max=$consecutiveCorrectMax&wrong_question_ids=".urlencode($wrongQuestionIds)."&answered_questions=$totalQuestions&correct_questions=$correctQuestions&answer_time=$answerTime";
+    file_get_contents($recordUrl);
+    
+    // 清除当前章节的答题会话数据（防止返回刷分）
+    unset($_SESSION['questions']);
+    unset($_SESSION['current_question_index']);
+    unset($_SESSION['is_question_shuffled']);
+    
+    // 显示统计信息
+    echo '<!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>答题完成</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding: 50px;
+            }
+            .result-box {
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 30px;
+                border: 1px solid #ddd;
+                border-radius: 10px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #333;
+            }
+            p {
+                font-size: 18px;
+                margin-bottom: 15px;
+            }
+            .btn {
+                display: inline-block;
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+                font-size: 16px;
+            }
+            .btn:hover {
+                background-color: #45a049;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="result-box">
+            <h1>答题完成！</h1>
+            <p>回答题目数: '. $totalQuestions .' 题</p>
+            <p>答对题目数: '. $correctQuestions .' 题</p>
+            <p>连续答对最高记录: '. $consecutiveCorrectMax .' 题</p>
+            <p>正确率: '. number_format($accuracy, 2) .'%</p>
+            <p>分数: '. number_format($_SESSION['score'], 1) .'</p>
+            <p>用时: '. $answerTime .' 秒</p>
+            <a href="select_chapter.php" class="btn">返回章节选择</a>
+        </div>
+    </body>
+    </html>';
+    exit();
+}
+
+// 获取当前题目的索引
+$current_index = $_SESSION['current_question_index'];
+$current_question = $_SESSION['questions'][$current_index];
+// 获取题目总数
+$total_questions = count($_SESSION['questions']);
+// 计算当前是第几题（索引从 0 开始，所以加 1）
+$current_question_number = $current_index + 1;
+
+// 打乱选项顺序
+$options = ['option1', 'option2', 'option3', 'option4'];
+$validOptions = [];
+foreach ($options as $option) {
+    if (!empty($current_question[$option])) {
+        $validOptions[$option] = $current_question[$option];
+    }
+}
+shuffle($validOptions);
+
+// 获取正确答案的原始键名
+$correctAnswerKey = 'option' . $current_question['answer'];
+// 找到打乱后正确答案的位置
+$correctAnswerPosition = array_search($current_question[$correctAnswerKey], $validOptions) + 1;
+
+// 加密函数
+function encrypt($data, $key) {
+    $timestamp = time();
+    $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length('aes-256-cbc'));
+    $encryptedData = openssl_encrypt($data, 'aes-256-cbc', $key, 0, $iv);
+    $base64Encoded = base64_encode($timestamp . ':' . base64_encode($iv) . ':' . base64_encode($encryptedData));
+    // 日志输出，检查生成的 Base64 字符串
+    error_log("Generated Base64: $base64Encoded");
+    return $base64Encoded;
+}
+
+// 使用定义的密钥
+$encryptedAnswer = encrypt($correctAnswerPosition, ENCRYPTION_KEY);
+
+// 记录当前题目的开始时间（用于计算单题用时，但总时间从章节开始时计算）
+$_SESSION['current_question_start_time'] = microtime(true);
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>答题中……第<?php echo $current_question_number; ?>题，共<?php echo $total_questions; ?>题，当前分数: <?php echo number_format($_SESSION['score'], 1); ?></title>
+    <link href="./css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* 全局样式 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-size: cover;
+            background-repeat: no-repeat;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        /* 标题样式 */
+        h1 {
+            font-size: 2em;
+            color: #007BFF;
+            margin-bottom: 10px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 表单样式 */
+        form {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            width: 500px;
+            margin-bottom: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            width: 60%;
+        }
+
+        /* 问题样式 */
+        .question {
+            font-size: 1.8em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        /* 选项样式 */
+        .option {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        input[type="radio"] {
+            margin-right: 15px;
+        }
+
+        /* 增大选项字体大小 */
+        .option label {
+            color: #666;
+            font-weight: 500;
+            font-size: 1.6em;
+        }
+
+        /* 增加选择器特异性 */
+        .option label.correct {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .option label.wrong {
+            color: #dc3545;
+        }
+
+        /* 链接样式 */
+        .links {
+            display: flex;
+            gap: 30px;
+        }
+
+        .links a {
+            display: inline-block;
+            background-color: #007BFF;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .links a:hover {
+            background-color: #0056b3;
+            transform: translateY(-3px);
+        }
+
+        /* 连续答对题目数量和倒计时样式 */
+        #right-float-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #consecutive-correct {
+            font-size: 1.5em;
+            color: #28a745;
+            background-color: rgba(40, 167, 69, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        #countdown {
+            font-size: 2em;
+            color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            visibility: hidden; /* 初始状态不可见，但占用空间 */
+        }
+
+        #bonus-message {
+            font-size: 1.5em;
+            color: #007BFF;
+            background-color: rgba(0, 123, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            visibility: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <h1 id="question-title">答题中……第<?php echo $current_question_number; ?>题，共<?php echo $total_questions; ?>题，当前分数: <?php echo number_format($_SESSION['score'], 1); ?></h1>
+    <form id="questionForm">
+        <p class="question"><?php echo htmlspecialchars($current_question['question']); ?></p>
+        <?php
+        $optionLabels = ['1', '2', '3', '4'];
+        $index = 0;
+        foreach ($validOptions as $option) {
+            echo '<div class="option">';
+            echo '<input type="radio" id="option_' . $optionLabels[$index] . '" name="answer" value="' . $optionLabels[$index] . '">';
+            echo '<label for="option_' . $optionLabels[$index] . '">' . $optionLabels[$index] . '. ' . htmlspecialchars($option) . '</label>';
+            echo '</div>';
+            $index++;
+        }
+        ?>
+    </form>
+    <div class="links">
+        <!-- 添加确认对话框防止意外返回 -->
+        <a href="select_chapter.php?chapter=<?php echo $_SESSION['selected_chapter']; ?>" onclick="return confirm('确定要返回章节选择吗？当前答题进度将会重置。')">返回选择章节</a>
+        <a href="logout.php">退出登录</a>
+    </div>
+    <div id="right-float-container">
+        <p id="consecutive-correct">连续答对题目数量: <?php echo $_SESSION['consecutive_correct']; ?></p>
+        <div id="countdown"></div>
+        <div id="bonus-message"></div>
+    </div>
+
+    <script>
+        window.onload = function () {
+            // 禁止鼠标右键
+            document.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+            });
+
+            const options = document.querySelectorAll('input[type="radio"]');
+            const encryptedAnswer = <?php echo json_encode($encryptedAnswer); ?>;
+            let currentQuestionNumber = <?php echo $current_question_number; ?>;
+            const totalQuestions = <?php echo $total_questions; ?>;
+            const consecutiveCorrectElement = document.getElementById('consecutive-correct');
+            const countdownElement = document.getElementById('countdown');
+            const bonusMessageElement = document.getElementById('bonus-message');
+            let countdownInterval;
+            let isCountdownActive = false;
+
+            // 检查字符串是否为有效的 Base64 编码
+            function isValidBase64(str) {
+                try {
+                    return btoa(atob(str)) === str;
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            // 通过 AJAX 请求调用后台
+            function decrypt(encrypted, key) {
+                return new Promise((resolve, reject) => {
+                    if (!isValidBase64(encrypted)) {
+                        console.error('传入的字符串不是有效的 Base64 编码:', encrypted);
+                        reject('Invalid Base64 data');
+                        return;
+                    }
+                    const [timestamp, ivBase64, encryptedDataBase64] = atob(encrypted).split(':');
+                    if (!isValidBase64(ivBase64) || !isValidBase64(encryptedDataBase64)) {
+                        console.error('IV 或加密数据不是有效的 Base64 编码');
+                        reject('Invalid Base64 data');
+                        return;
+                    }
+                    const currentTimestamp = Math.floor(Date.now() / 1000);
+                    // 检查时间戳是否在合理范围内（例如，10 分钟内）
+                    if (currentTimestamp - timestamp > 600) {
+                        reject('Timestamp expired');
+                        return;
+                    }
+
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', 'decrypt_answer.php', true);
+                    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                    xhr.onreadystatechange = function () {
+                        if (xhr.readyState === 4) {
+                            if (xhr.status === 200) {
+                                resolve(xhr.responseText);
+                            } else {
+                                console.error('解密请求失败:', xhr.statusText);
+                                reject('Decryption failed');
+                            }
+                        }
+                    };
+                    xhr.send(`encrypted=${encodeURIComponent(encryptedDataBase64)}&iv=${encodeURIComponent(ivBase64)}&key=${encodeURIComponent(key)}`);
+                });
+            }
+
+            // 使用定义的密钥
+            const encryptionKey = "<?php echo ENCRYPTION_KEY; ?>";
+            let correctAnswer;
+
+            decrypt(encryptedAnswer, encryptionKey)
+              .then((answer) => {
+                    correctAnswer = answer;
+                })
+              .catch((error) => {
+                    console.error('解密过程中出现错误:', error);
+                });
+
+            // 倒计时函数
+            function startCountdown(timeLeft) {
+                isCountdownActive = true;
+                if (countdownElement) {
+                    countdownElement.style.visibility = 'visible';
+                    countdownElement.textContent = `倒计时: ${timeLeft} 秒`;
+                }
+                countdownInterval = setInterval(() => {
+                    timeLeft--;
+                    localStorage.setItem('countdownTimeLeft', timeLeft);
+                    if (timeLeft >= 0 && countdownElement) {
+                        countdownElement.textContent = `倒计时: ${timeLeft} 秒`;
+                    }
+                    if (timeLeft < 0) {
+                        clearInterval(countdownInterval);
+                        if (countdownElement) {
+                            countdownElement.style.visibility = 'hidden';
+                        }
+                        localStorage.removeItem('countdownTimeLeft');
+                        isCountdownActive = false;
+                    }
+                }, 1000);
+            }
+
+            // 保存倒计时状态并跳转页面
+            function saveAndRedirect(url) {
+                const countdownTimeLeft = localStorage.getItem('countdownTimeLeft');
+                if (countdownTimeLeft!== null) {
+                    // 在 URL 中带上倒计时剩余时间参数
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('countdownTimeLeft', countdownTimeLeft);
+                    const newUrl = url + (window.location.search? '&' : '?') + params.toString();
+                    window.location.href = newUrl;
+                } else {
+                    window.location.href = url;
+                }
+            }
+
+            // 正确初始化 correctCount 变量
+            let correctCount = <?php echo $_SESSION['correct_count']; ?>;
+            let consecutiveCorrectMax = <?php echo $_SESSION['consecutive_correct_max']; ?>;
+            let wrongQuestionIds = <?php echo json_encode($_SESSION['wrong_question_ids']); ?>;
+
+            // 记录当前题目的开始时间（毫秒）
+            const currentQuestionStartTime = performance.now();
+            
+            // 获取总答题时间（如果有）
+            let totalAnswerTime = parseInt(localStorage.getItem('totalAnswerTime')) || 0;
+            
+            // 当前题目的ID
+            const currentQuestionId = <?php echo $current_question['id']; ?>;
+
+            options.forEach(option => {
+                option.addEventListener('change', function () {
+                    const selectedAnswer = this.value;
+                    options.forEach(opt => {
+                        const label = opt.nextElementSibling;
+                        label.classList.remove('correct', 'wrong');
+                    });
+
+                    let isCorrect = false;
+                    if (selectedAnswer === correctAnswer) {
+                        this.nextElementSibling.classList.add('correct');
+                        isCorrect = true;
+                        correctCount++;
+                        // 更新 PHP 会话中的正确答题数量
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('GET', `update_correct_count.php?correctCount=${correctCount}`, true);
+                        xhr.send();
+                        let addScore = isCountdownActive? 0.3 : 0.2;
+                        if (isCountdownActive) {
+                            if (bonusMessageElement) {
+                                bonusMessageElement.style.visibility = 'visible';
+                                bonusMessageElement.textContent = '答对 +0.3 分';
+                                setTimeout(() => {
+                                    if (bonusMessageElement) {
+                                        bonusMessageElement.style.visibility = 'hidden';
+                                    }
+                                }, 2000);
+                            }
+                        }
+                        // 发送 AJAX 请求更新分数
+                        const xhrScore = new XMLHttpRequest();
+                        xhrScore.open('GET', `update_score.php?addScore=${addScore}`, true);
+                        xhrScore.onreadystatechange = function () {
+                            if (xhrScore.readyState === 4 && xhrScore.status === 200) {
+                                const newScore = parseFloat(xhrScore.responseText);
+                                document.title = '答题中……第' + currentQuestionNumber + '题，共' + totalQuestions + '题，当前分数: ' + newScore.toFixed(1);
+                                const questionTitle = document.getElementById('question-title');
+                                if (questionTitle) {
+                                    questionTitle.textContent = '答题中……第' + currentQuestionNumber + '题，共' + totalQuestions + '题，当前分数: ' + newScore.toFixed(1);
+                                }
+                            }
+                        };
+                        xhrScore.send();
+                        // 增加连续答对题目的计数器
+                        const xhrConsecutive = new XMLHttpRequest();
+                        xhrConsecutive.open('GET', 'update_consecutive.php?action=increase', true);
+                        xhrConsecutive.onreadystatechange = function () {
+                            if (xhrConsecutive.readyState === 4 && xhrConsecutive.status === 200) {
+                                const newConsecutive = parseInt(xhrConsecutive.responseText);
+                                if (newConsecutive > consecutiveCorrectMax) {
+                                    consecutiveCorrectMax = newConsecutive;
+                                    const xhrMax = new XMLHttpRequest();
+                                    xhrMax.open('GET', `update_consecutive_max.php?max=${consecutiveCorrectMax}`, true);
+                                    xhrMax.send();
+                                }
+                                if (consecutiveCorrectElement) {
+                                    consecutiveCorrectElement.textContent = '连续答对题目数量: ' + newConsecutive;
+                                }
+
+                                let timeLeft = localStorage.getItem('countdownTimeLeft');
+                                if (newConsecutive === 3) {
+                                    if (timeLeft === null) {
+                                        timeLeft = 10;
+                                    }
+                                    startCountdown(timeLeft);
+                                } else if (newConsecutive === 6) {
+                                    if (timeLeft!== null) {
+                                        timeLeft = parseInt(timeLeft) + 15;
+                                    } else {
+                                        timeLeft = 15;
+                                    }
+                                    if (countdownInterval) {
+                                        clearInterval(countdownInterval);
+                                    }
+                                    startCountdown(timeLeft);
+                                }
+                            }
+                        };
+                        xhrConsecutive.send();
+                    } else {
+                        this.nextElementSibling.classList.add('wrong');
+                        options.forEach(opt => {
+                            if (opt.value === correctAnswer) {
+                                opt.nextElementSibling.classList.add('correct');
+                            }
+                        });
+                        // 重置连续答对题目的计数器
+                        const xhrConsecutive = new XMLHttpRequest();
+                        xhrConsecutive.open('GET', 'update_consecutive.php?action=reset', true);
+                        xhrConsecutive.onreadystatechange = function () {
+                            if (xhrConsecutive.readyState === 4 && xhrConsecutive.status === 200) {
+                                const newConsecutive = parseInt(xhrConsecutive.responseText);
+                                if (consecutiveCorrectElement) {
+                                    consecutiveCorrectElement.textContent = '连续答对题目数量: ' + newConsecutive;
+                                }
+                            }
+                        };
+                        xhrConsecutive.send();
+
+                        // 记录错题 ID
+                        if (!wrongQuestionIds.includes(currentQuestionId)) {
+                            wrongQuestionIds.push(currentQuestionId);
+                        }
+                        const xhrWrong = new XMLHttpRequest();
+                        xhrWrong.open('GET', `update_wrong_question_ids.php?wrongQuestionIds=${JSON.stringify(wrongQuestionIds)}`, true);
+                        xhrWrong.send();
+                    }
+
+                    // 禁用所有选项，防止再次选择
+                    options.forEach(opt => {
+                        opt.disabled = true;
+                    });
+
+                    // 计算当前题目的答题时间并累加到总时间
+                    const currentQuestionEndTime = performance.now();
+                    const currentQuestionTime = currentQuestionEndTime - currentQuestionStartTime;
+                    totalAnswerTime += currentQuestionTime;
+                    
+                    // 保存总答题时间到localStorage
+                    localStorage.setItem('totalAnswerTime', totalAnswerTime);
+                    
+                    // 标记当前题目为已作答
+                    const xhrAnswered = new XMLHttpRequest();
+                    xhrAnswered.open('GET', `mark_question_answered.php?questionId=${currentQuestionId}`, true);
+                    xhrAnswered.send();
+
+                    // 进入下一题
+                    <?php
+                    $chapter = $_SESSION['selected_chapter'];
+                    if ($current_index < count($_SESSION['questions']) - 1) {
+                        // 增加当前题目的索引
+                        $_SESSION['current_question_index']++;
+                        echo 'setTimeout(() => {';
+                        echo 'currentQuestionNumber++;';
+                        echo 'saveAndRedirect(\'question.php?chapter='.$chapter.'\');';
+                        echo '}, 2000);';
+                    } else {
+                        echo 'setTimeout(() => {';
+                        echo 'const score = parseFloat(document.title.match(/当前分数: (\\d+\\.\\d+)/)[1]);';
+                        echo 'const accuracy = (correctCount / totalQuestions) * 100;';
+                        
+                        // 使用累计的总答题时间
+                        echo 'const totalAnswerTime = localStorage.getItem(\'totalAnswerTime\') || 0;';
+                        echo 'const answerTime = Math.floor(totalAnswerTime / 1000);';
+                        
+                        // 弹出alert信息
+                        echo 'alert(\'答题结束！\\n回答题目数: \' + totalQuestions + \' 题\\n答对题目数: \' + correctCount + \' 题\\n连续答对最高记录: \' + consecutiveCorrectMax + \' 题\\n正确率: \' + accuracy.toFixed(2) + \'%\\n分数: \' + score.toFixed(1) + \'\\n用时: \' + answerTime + \' 秒\');';
+                        
+                        // 发送总答题时间到服务器
+                        echo "const xhrRecord = new XMLHttpRequest();";
+                        echo "const recordUrl = 'insert_record.php?chapter=".$chapter."&accuracy=' + accuracy.toFixed(2) + '&consecutive_correct_max=' + consecutiveCorrectMax + '&wrong_question_ids=' + JSON.stringify(wrongQuestionIds) + '&answered_questions=' + totalQuestions + '&correct_questions=' + correctCount + '&answer_time=' + answerTime;";
+                        echo "xhrRecord.open('GET', recordUrl, true);";
+                        echo 'xhrRecord.send();';
+
+                        echo 'window.location.href = \'./select_chapter.php?chapter='.$chapter.'\';';
+                        echo '}, 2000);';
+                    }
+                    ?>
+                });
+            });
+
+            // 页面加载时直接检查并显示倒计时
+            const urlParams = new URLSearchParams(window.location.search);
+            const countdownTimeLeft = urlParams.get('countdownTimeLeft') || localStorage.getItem('countdownTimeLeft');
+            if (countdownTimeLeft!== null && parseInt(countdownTimeLeft) > 0) {
+                isCountdownActive = true;
+                if (countdownElement) {
+                    countdownElement.style.visibility = 'visible';
+                    countdownElement.textContent = `倒计时: ${countdownTimeLeft} 秒`;
+                }
+                startCountdown(parseInt(countdownTimeLeft));
+            }
+        };
+    </script>
+</body>
+
+</html>
